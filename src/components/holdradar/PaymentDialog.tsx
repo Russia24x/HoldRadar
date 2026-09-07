@@ -54,13 +54,21 @@ export function PaymentDialog({
 }) {
   const [st, setSt] = useState<PaymentState>({ txHash: "", phase: "idle", evmSending: false });
   const [copied, setCopied] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<StatusResponse | null>(status);
 
   useEffect(() => {
-    if (open) setSt({ txHash: "", phase: "idle", evmSending: false });
+    if (open) {
+      setSt({ txHash: "", phase: "idle", evmSending: false });
+      // fresh spot prices each time the dialog opens (self-heals rate-limit gaps)
+      fetch("/api/status", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j: StatusResponse) => setLiveStatus(j))
+        .catch(() => {});
+    }
   }, [open]);
 
-  const chainSpec = useMemo(() => status?.requirements.chains.find((c) => (c.network.includes("2741") ? c.key === "abstract" : true) && c.network.includes(st.chain === "abstract" ? "2741" : "solana")), [status, st.chain]);
-  const chainData = status?.requirements.chains.find((c) =>
+  const chainSpec = useMemo(() => liveStatus?.requirements.chains.find((c) => (c.network.includes("2741") ? c.key === "abstract" : true) && c.network.includes(st.chain === "abstract" ? "2741" : "solana")), [status, st.chain]);
+  const chainData = liveStatus?.requirements.chains.find((c) =>
     st.chain === "abstract" ? c.network === "eip155:2741" : c.network === "solana:mainnet"
   );
   const assetData = chainData?.assets.find((a) => a.symbol === st.asset);
@@ -71,10 +79,10 @@ export function PaymentDialog({
     if (assetData.stable) return 1.0 * PRICE_TOLERANCE_MULT;
     const cgId =
       assetData.symbol === "SOL" ? "solana" : assetData.symbol === "PENGU" ? "pudgy-penguins" : "ethereum";
-    const p = status?.prices?.[cgId];
+    const p = liveStatus?.prices?.[cgId];
     if (!p) return null;
     return (PRICE_TOLERANCE_MULT / p) * 1;
-  }, [assetData, status]);
+  }, [assetData, liveStatus]);
 
   const qrUri = useMemo(() => {
     if (!chainData || !assetData || amount == null || st.chain !== "solana") return null;
@@ -251,7 +259,7 @@ export function PaymentDialog({
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   {chainData.assets.map((a) => {
                     const cgId = a.symbol === "SOL" ? "solana" : a.symbol === "PENGU" ? "pudgy-penguins" : a.symbol === "ETH" ? "ethereum" : null;
-                    const price = cgId ? status?.prices?.[cgId] : a.stable ? 1 : undefined;
+                    const price = cgId ? liveStatus?.prices?.[cgId] : a.stable ? 1 : undefined;
                     return (
                       <button
                         key={a.symbol}

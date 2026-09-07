@@ -47,7 +47,9 @@ export function createSession(
 }
 
 export function serializeSession(p: SessionPayload): string {
-  const body = [p.id, p.expMs, p.scope, p.source, p.payer ?? "", p.chain ?? "", p.txHash ?? ""].join("|");
+  // The HMAC binds id|exp|scope (the token-visible fields). source/payer/chain
+  // are audit fields stored in SessionRecord (DB), not in the cookie.
+  const body = [p.id, p.expMs, p.scope].join("|");
   return `v1.${p.id}.${p.expMs}.${p.scope}.${sign(body)}`;
 }
 
