@@ -67,3 +67,30 @@ Work Log:
 Stage Summary:
 - سایت کامل و قابل‌استفاده است؛ داده ۱۰۰٪ زنده؛ paywall سمت سرور تأییدشده
 - هر جلسهٔ بعدی: اول sync check (قانون ۲ RULES.md)، بعد ادامه از بخش «ریسک‌ها/کارهای باقی‌مانده»
+
+---
+
+Task ID: r2 (webDevReview round 2)
+Agent: webDevReview cron agent (Z.ai Code)
+Task: QA کامل + فیچرهای جدید + رفع باگ overflow موبایل
+
+Work Log:
+- Sync check: local == origin/main (پاک) → ادامه طبق RULES.md
+- QA با agent-browser: رندر رتبه‌بندی، sort dropdown (تست‌نشده از دور قبل → سالم)، expand ردیف، search، موبایل، console بدون خطای runtime
+- فیچرهای جدید:
+  • RankDelta badge (↑/↓/جدید/ثابت) نسبت به اسنپ‌شات قبل — prevRank/rankChange در scoring + pipeline + API + UI (جدول، پودیوم، جزئیات ردیف «رتبهٔ دیروز»)
+  • LiveCountdown زندهٔ نشست (هر ۳۰ ثانیه tick، هشدار کهرنگی <۱ ساعت)
+  • Change90Chip رنگی برای تغییر قیمت ۹۰روزه در ستون جدول
+  • دکمه «اشتراک‌گذاری»: خلاصهٔ متنی top-25 در کلیپ‌بورد + toast (تست شد ✅)
+  • کلید میانبر «/» برای فوکوس جست‌وجو + Esc برای blur
+  • chip «مقایسه با: {prevDate}» در نوار متا (prevDate به API اضافه شد)
+  • CoinGecko: retry ×3 با backoff نمایی برای 429/5xx
+- رفع باگ‌ها:
+  • overflow موبایل (397>390) از ستون badge رتبه → «ثابت» فقط sm+ ، gaps فشرده‌تر → 390=390 ✅
+  • overflow هدر موبایل (397) → shrink-0/min-w-0/truncate/gap-2 → ✅
+- pipeline دوباره اجرا شد (force) → prevDate پر شد، deltas محاسبه شد (۲۳ ثابت/۱ بالا/۱ پایین در top-25 امروز؛ فردا مقایسهٔ واقعی روزانه فعال می‌شود)
+- lint پاک، commit `81fdd2d` push شد
+
+Stage Summary:
+- همهٔ تست‌های QA سبز؛ ۵ فیچر جدید + ۲ رفع باگ موبایل
+- توصیهٔ دور بعد: ۱) بعد از نیمه‌شب UTC یک اجرای pipeline تا deltaهای واقعی روزانه در UI دیده شود ۲) اضافه‌کردن snapshot تاریخچه API (`/api/history`) + نمایش sparkline تغییر امتیاز ۳) تست پرداخت واقعی mainnet با کاربر ۴) export CSV/JSON علاوه بر متن
