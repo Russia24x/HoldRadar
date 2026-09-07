@@ -77,15 +77,37 @@ export interface DefiData {
     holderRevenue30d: number | null;
     holderRevenue1y: number | null;
   }>;
+  /** chain name (lowercase) → chain TVL (for L1 tokens like SOL / AVAX / TRX) */
+  chainTvl: Map<string, number>;
+}
+
+interface ChainEntry {
+  name?: string;
+  tokenSymbol?: string;
+  tvl?: number | null;
+}
+
+async function fetchChains(): Promise<Map<string, number>> {
+  try {
+    const v = await cachedJson<ChainEntry[]>("chains", `${BASE}/chains`, 60 * 60_000);
+    const m = new Map<string, number>();
+    for (const c of v ?? []) {
+      if (c.name && c.tvl && c.tvl > 0) m.set(c.name.toLowerCase(), c.tvl);
+    }
+    return m;
+  } catch {
+    return new Map();
+  }
 }
 
 /** Build the gecko-indexed DefiLlama dataset (3 requests). */
 export async function buildDefiDataset(): Promise<DefiData> {
-  const [protocols, fees, revenue, holders] = await Promise.all([
+  const [protocols, fees, revenue, holders, chainTvl] = await Promise.all([
     fetchProtocols(),
     fetchFeesOverview("dailyFees"),
     fetchFeesOverview("dailyRevenue"),
     fetchFeesOverview("dailyHoldersRevenue"),
+    fetchChains(),
   ]);
 
   const bySlug = new Map<string, { gecko?: string; tvl: number }>();
@@ -138,5 +160,5 @@ export async function buildDefiDataset(): Promise<DefiData> {
   }
 
   void bySlug; // (kept for future per-slug debugging)
-  return { byGecko };
+  return { byGecko, chainTvl };
 }

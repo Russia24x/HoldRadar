@@ -7,9 +7,9 @@ import type { DefiData } from "./sources/defillama";
  * «امتیاز ارزش برای هولدر» — composite score engine.
  *
  * Every sub-criterion is min-max normalized to 0..100 against the day's
- * candidate pool. Missing data drops the criterion and redistributes its
- * weight proportionally (blueprint §5.3). Values that ARE reported as 0 stay
- * 0 (real data); null means "no data" → «داده در دسترس نیست».
+ * candidate pool. A criterion without data scores 0 for that row (weight
+ * kept — see note in the composite section). Values that ARE reported as 0
+ * stay 0 (real data); null means "no data" → «داده در دسترس نیست».
  */
 
 export interface SubScore {
@@ -41,12 +41,13 @@ export interface ScoredRow {
   // normalized sub-scores
   sub: Partial<Record<(typeof CRITERIA)[number]["key"], SubScore>>;
   composite: number; // 0..100
-  effectiveWeights: Record<string, number>; // after redistribution for this row
+  effectiveWeights: Record<string, number>; // static weights (kept even when data missing)
 }
 
 export interface PoolRow extends CoinMarkets {
   defi?: DefiData["byGecko"] extends Map<string, infer V> ? V : never;
   prevTvl?: number | null;
+  tvlSource?: "protocol" | "chain";
 }
 
 /* ---------------- helpers ---------------- */
@@ -215,23 +216,20 @@ export function scorePool(pool: PoolRow[]): ScoreResult {
       };
     }
 
-    /* weighted composite with redistribution */
-    let weightSum = 0;
+    /* weighted composite — missing criterion contributes 0 (weight kept).
+       Rationale: this index rewards *verifiable* holder-value mechanics.
+       Redistributing missing weights inverted the ranking (coins with zero
+       DefiLlama evidence outranked coins with real holder revenue), so we
+       deliberately score "no data" as 0 for that criterion and say so in the
+       methodology. "Unknown" is not "good". */
     let acc = 0;
     const effectiveWeights: Record<string, number> = {};
     for (const crit of CRITERIA) {
       const s = sub[crit.key];
-      if (s == null) continue;
-      weightSum += crit.weight;
-      acc += crit.weight * s.score;
+      acc += crit.weight * (s ? s.score : 0);
       effectiveWeights[crit.key] = crit.weight;
     }
-    // redistribute missing weight proportionally
-    for (const crit of CRITERIA) {
-      if (sub[crit.key] == null) continue;
-      effectiveWeights[crit.key] = weightSum > 0 ? crit.weight / weightSum : crit.weight;
-    }
-    const composite = weightSum > 0 ? acc / weightSum : 0;
+    const composite = acc;
 
     return {
       rank: 0,

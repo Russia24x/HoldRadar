@@ -6,8 +6,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-vazirmatn), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -119,4 +119,85 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ---------------- HoldRadar custom theme ---------------- */
+
+:root.dark,
+html.dark {
+  --background: #07090d;
+  --foreground: #f4f6f8;
+}
+
+/* subtle premium scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 210, 140, 0.35);
+}
+
+.hr-score-bar {
+  background: linear-gradient(90deg, rgba(0, 210, 140, 0.65), #00d28c);
+}
+
+.hr-glow {
+  background:
+    radial-gradient(60rem 30rem at 85% -10%, rgba(0, 210, 140, 0.09), transparent 60%),
+    radial-gradient(40rem 24rem at 10% -5%, rgba(245, 192, 68, 0.05), transparent 60%);
+}
+
+.hr-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.hr-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  direction: ltr;
+  unicode-bidi: embed;
+  display: inline-block;
+}
+
+@keyframes hr-pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.hr-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 210, 140, 0.6);
+  animation: hr-pulse-ring 2.4s ease-out infinite;
+}
+
+@keyframes hr-scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(700%);
+  }
+}
+.hr-scanline {
+  animation: hr-scan 3.2s linear infinite;
 }

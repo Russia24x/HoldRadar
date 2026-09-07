@@ -1,38 +1,31 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Vazirmatn } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const vazirmatn = Vazirmatn({
+  variable: "--font-vazirmatn",
+  subsets: ["arabic", "latin"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
 });
 
 export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
+  title: "HoldRadar — رادار ارزش برای هولدر",
+  description:
+    "رتبه‌بندی روزانهٔ ۲۵ دارایی برتر بر اساس «امتیاز ارزش برای هولدر»: بازده واقعی، کمیابی، بازخرید و سوزاندن، بلوغ و اکوسیستم. دسترسی با پرداخت یک دلاری روی Abstract یا سولانا.",
+  keywords: ["HoldRadar", "رتبه‌بندی ارز دیجیتال", "ارزش برای هولدر", "Real Yield", "Abstract", "Solana", "PENGU", "x402"],
   openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
+    title: "HoldRadar — رادار ارزش برای هولدر",
+    description: "۲۵ دارایی برترِ امروز برای هولد، با یک دلار باز شود.",
     type: "website",
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-  },
+  robots: { index: true, follow: true },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#07090D",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -41,9 +34,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="fa" dir="rtl" className="dark" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${vazirmatn.variable} font-sans antialiased bg-[#07090D] text-zinc-100 min-h-screen flex flex-col`}
       >
         {children}
         <Toaster />

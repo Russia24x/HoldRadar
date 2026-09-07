@@ -101,11 +101,22 @@ export async function runPipeline(
       buildDefiDataset(),
     ]);
 
-    const pool: PoolRow[] = coins.map((c) => ({
-      ...c,
-      defi: defi.byGecko.get(c.id) ?? undefined,
-      prevTvl: prevTvlMap.get(c.id) ?? null,
-    }));
+    const pool: PoolRow[] = coins.map((c) => {
+      let defiRec = defi.byGecko.get(c.id) ?? undefined;
+      let tvlSource: "protocol" | "chain" | undefined;
+      // L1 tokens (SOL, AVX, TRX, …): when no protocol TVL exists, use the
+      // chain TVL of the matching network (real DefiLlama /chains data).
+      if (!defiRec || !(defiRec.tvl > 0)) {
+        const chainTvl = defi.chainTvl.get(c.name.trim().toLowerCase());
+        if (chainTvl != null) {
+          defiRec = defiRec
+            ? { ...defiRec, tvl: chainTvl }
+            : { slugs: [], tvl: chainTvl, fees30d: null, revenue30d: null, holderRevenue30d: null, holderRevenue1y: null };
+          tvlSource = "chain";
+        }
+      }
+      return { ...c, defi: defiRec, prevTvl: prevTvlMap.get(c.id) ?? null, tvlSource };
+    });
 
     const { rows, coverage } = scorePool(pool);
 
