@@ -201,3 +201,44 @@ html.dark {
 .hr-scanline {
   animation: hr-scan 3.2s linear infinite;
 }
+
+/* gradient score text (top ranks) */
+.hr-grad-text {
+  background: linear-gradient(135deg, #f2f7f4 25%, #37e2a1 75%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* sparkline last-point pulse */
+@keyframes hr-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+.hr-spark-dot {
+  animation: hr-dot-pulse 2.2s ease-in-out infinite;
+}
+
+/* champion-card shine sweep (RTL-aware direction) */
+@keyframes hr-shine {
+  0% {
+    transform: translateX(130%) skewX(18deg);
+  }
+  55%,
+  100% {
+    transform: translateX(-260%) skewX(18deg);
+  }
+}
+.hr-shine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 38%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  animation: hr-shine 5s ease-in-out 1.2s infinite;
+}

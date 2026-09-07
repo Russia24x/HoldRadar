@@ -18,6 +18,11 @@ import {
   RefreshCw,
   Share2,
   ChartColumn as ChartIcon,
+  Archive,
+  FileSpreadsheet,
+  FileJson,
+  Crown,
+  LineChart,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,7 +35,9 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { fmtCompactUsd, fmtPct, fmtPrice, fmtFaDateTime, fmtNum } from "./format";
 import { RankDelta, LiveCountdown, Change90Chip } from "./badges";
-import type { RankingsResponse, RankRow } from "./types";
+import { Sparkline, trendStats } from "./Sparkline";
+import { HistoryDialog } from "./HistoryDialog";
+import type { RankingsResponse, RankRow, HistoryResponse, TrendPoint } from "./types";
 
 const CRITERIA_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   realYield: { label: "بازده واقعی هولدر", icon: TrendingUp },
@@ -45,6 +52,19 @@ const MEDALS = [
   { ring: "ring-zinc-300/30", text: "text-zinc-300", bg: "bg-zinc-300/10", label: "۲" },
   { ring: "ring-orange-400/30", text: "text-orange-300", bg: "bg-orange-400/10", label: "۳" },
 ];
+
+/** generic client-side file download (Blob → anchor → revoke) */
+function downloadBlob(name: string, content: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
 
 function SubScoreDots({ row }: { row: RankRow }) {
   const keys = Object.keys(CRITERIA_META);
@@ -79,26 +99,34 @@ function ScoreBar({ value, className = "" }: { value: number; className?: string
   );
 }
 
-function TopPodium({ rows }: { rows: RankRow[] }) {
+function TopPodium({ rows, trends }: { rows: RankRow[]; trends?: Record<string, TrendPoint[]> }) {
   const top = rows.slice(0, 3);
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       {top.map((r, i) => {
         const m = MEDALS[i]!;
+        const trend = trends?.[r.id]?.map((p) => p.s);
         return (
           <motion.div
             key={r.id}
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.12, duration: 0.5 }}
-            className={`hr-card relative overflow-hidden rounded-2xl p-5 ring-1 transition-shadow hover:shadow-[0_12px_40px_-12px_rgba(0,210,140,0.25)] ${m.ring}`}
+            className={`hr-card relative overflow-hidden rounded-2xl p-5 ring-1 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(0,210,140,0.28)] ${m.ring}`}
           >
             <div className={`absolute inset-x-0 top-0 h-[2px] ${m.bg}`} />
-            {i === 0 && <div className="pointer-events-none absolute -inset-x-8 -top-8 h-24 bg-gradient-to-b from-amber-300/[0.07] to-transparent blur-xl" />}
+            {i === 0 && (
+              <>
+                <div className="pointer-events-none absolute -inset-x-8 -top-8 h-24 bg-gradient-to-b from-amber-300/[0.07] to-transparent blur-xl" />
+                <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                  <div className="hr-shine" />
+                </div>
+                <Crown className="absolute left-4 top-4 h-4 w-4 text-amber-300/60" />
+              </>
+            )}
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 {r.image ? (
-                   
                   <img src={r.image} alt={r.name} className="h-10 w-10 rounded-full ring-1 ring-white/10" />
                 ) : (
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5"><Coins className="h-5 w-5 text-zinc-500" /></div>
@@ -116,25 +144,31 @@ function TopPodium({ rows }: { rows: RankRow[] }) {
             <div className="mt-4 flex items-end justify-between">
               <div>
                 <div className="text-[10px] text-zinc-500">امتیاز ارزش برای هولدر</div>
-                <div className="hr-num text-3xl font-black tracking-tight text-zinc-50">{r.composite.toFixed(1)}</div>
+                <div className={`hr-num text-3xl font-black tracking-tight ${i === 0 ? "hr-grad-text" : "text-zinc-50"}`}>{r.composite.toFixed(1)}</div>
               </div>
               <Trophy className={`h-5 w-5 ${m.text} opacity-70`} />
             </div>
             <ScoreBar value={r.composite} className="mt-3" />
             <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-lg bg-white/[0.03] px-2 py-1.5">
+              <div className="rounded-lg bg-white/[0.03] px-2 py-1.5 transition-colors hover:bg-white/[0.06]">
                 <div className="text-[9px] text-zinc-500">بازده سالانه</div>
                 <div className="hr-num text-[11px] font-bold text-emerald-300">{r.holderYieldAnnual != null ? (r.holderYieldAnnual * 100).toFixed(1) + "%" : "—"}</div>
               </div>
-              <div className="rounded-lg bg-white/[0.03] px-2 py-1.5">
+              <div className="rounded-lg bg-white/[0.03] px-2 py-1.5 transition-colors hover:bg-white/[0.06]">
                 <div className="text-[9px] text-zinc-500">سهم هولدر</div>
                 <div className="hr-num text-[11px] font-bold text-amber-200">{r.holderShare != null ? (r.holderShare * 100).toFixed(0) + "%" : "—"}</div>
               </div>
-              <div className="rounded-lg bg-white/[0.03] px-2 py-1.5">
+              <div className="rounded-lg bg-white/[0.03] px-2 py-1.5 transition-colors hover:bg-white/[0.06]">
                 <div className="text-[9px] text-zinc-500">TVL</div>
                 <div className="hr-num text-[11px] font-bold text-zinc-200">{fmtCompactUsd(r.tvl)}</div>
               </div>
             </div>
+            {trend && trend.length >= 2 && (
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.05] pt-3">
+                <span className="text-[9px] text-zinc-600">روند {trend.length} روزه</span>
+                <Sparkline points={trend} width={92} height={26} strokeWidth={1.8} />
+              </div>
+            )}
           </motion.div>
         );
       })}
@@ -142,10 +176,32 @@ function TopPodium({ rows }: { rows: RankRow[] }) {
   );
 }
 
-function RowDetail({ row }: { row: RankRow }) {
+function RowDetail({ row, trend }: { row: RankRow; trend?: TrendPoint[] }) {
   const keys = Object.keys(CRITERIA_META);
+  const stats = trendStats(trend ?? []);
   return (
     <div className="grid grid-cols-1 gap-6 border-t border-white/[0.06] bg-black/20 px-4 py-6 sm:px-8 lg:grid-cols-2">
+      {/* score trend across archived days */}
+      {stats && (
+        <div className="lg:col-span-2">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-bold text-zinc-300">
+              <LineChart className="h-4 w-4 text-emerald-300" /> روند امتیاز کل ({stats.days} روز آرشیو)
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+              <span className={`hr-num rounded-md px-2 py-1 font-bold ${stats.delta >= 0 ? "bg-emerald-400/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}>
+                {stats.delta >= 0 ? "+" : ""}{stats.delta.toFixed(1)} از {stats.firstDate}
+              </span>
+              <span className="hr-num rounded-md bg-white/[0.04] px-2 py-1 text-zinc-500">کمینه {stats.min.toFixed(1)}</span>
+              <span className="hr-num rounded-md bg-white/[0.04] px-2 py-1 text-zinc-500">بیشینه {stats.max.toFixed(1)}</span>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/[0.06] bg-black/25 px-3 py-2">
+            <Sparkline points={(trend ?? []).map((p) => p.s)} width={640} height={52} responsive />
+          </div>
+        </div>
+      )}
+
       {/* subscores */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-2 text-xs font-bold text-zinc-300">
@@ -193,7 +249,7 @@ function RowDetail({ row }: { row: RankRow }) {
             ["رتبهٔ دیروز", row.prevRank != null ? "#" + row.prevRank : "جدید"],
             ["عرضهٔ در گردش", row.circulatingSupply != null ? fmtNum(row.circulatingSupply) : "—"],
           ].map(([label, val]) => (
-            <div key={label as string} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2">
+            <div key={label as string} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2 transition-colors hover:bg-white/[0.055]">
               <span className="text-zinc-500">{label}</span>
               <span className="hr-num font-semibold text-zinc-200">{val}</span>
             </div>
@@ -212,7 +268,7 @@ function RowDetail({ row }: { row: RankRow }) {
   );
 }
 
-function RankItem({ row, index }: { row: RankRow; index: number }) {
+function RankItem({ row, index, trend }: { row: RankRow; index: number; trend?: TrendPoint[] }) {
   const [open, setOpen] = useState(false);
   const medal = index < 3 ? MEDALS[index] : null;
   return (
@@ -221,7 +277,7 @@ function RankItem({ row, index }: { row: RankRow; index: number }) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.03, 0.4) }}
-      className={`hr-card overflow-hidden rounded-xl transition-colors ${open ? "border-emerald-400/20" : ""}`}
+      className={`hr-card overflow-hidden rounded-xl transition-all duration-200 hover:border-emerald-400/15 ${open ? "border-emerald-400/20 shadow-[0_8px_30px_-14px_rgba(0,210,140,0.2)]" : ""}`}
     >
       <button
         onClick={() => setOpen((v) => !v)}
@@ -229,7 +285,7 @@ function RankItem({ row, index }: { row: RankRow; index: number }) {
         className="group flex w-full items-center gap-2 px-3 py-3 text-right outline-none transition hover:bg-emerald-400/[0.03] focus-visible:ring-2 focus-visible:ring-emerald-400/40 sm:gap-3 sm:px-5"
       >
         <div className="flex shrink-0 flex-col items-center gap-1">
-          <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${medal ? medal.bg + " " + medal.text : "bg-white/[0.05] text-zinc-500"}`}>
+          <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${medal ? medal.bg + " " + medal.text : "bg-white/[0.05] text-zinc-500"} transition-transform duration-200 group-hover:scale-110`}>
             <span className="hr-num">{row.rank}</span>
           </div>
           <RankDelta change={row.rankChange} isNew={row.prevRank == null} />
@@ -237,13 +293,12 @@ function RankItem({ row, index }: { row: RankRow; index: number }) {
 
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {row.image ? (
-             
-            <img src={row.image} alt={row.name} className="h-8 w-8 shrink-0 rounded-full ring-1 ring-white/10" />
+            <img src={row.image} alt={row.name} className="h-8 w-8 shrink-0 rounded-full ring-1 ring-white/10 transition-transform duration-200 group-hover:scale-105" />
           ) : (
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5"><Coins className="h-4 w-4 text-zinc-500" /></div>
           )}
           <div className="min-w-0">
-            <div className="truncate text-sm font-bold">{row.name}</div>
+            <div className="truncate text-sm font-bold transition-colors group-hover:text-emerald-50">{row.name}</div>
             <div className="text-[10px] uppercase tracking-wide text-zinc-500">{row.symbol}</div>
           </div>
         </div>
@@ -273,9 +328,9 @@ function RankItem({ row, index }: { row: RankRow; index: number }) {
 
         <div className="flex shrink-0 items-center gap-2">
           <div className="text-left">
-            <div className="hr-num text-lg font-black tracking-tight text-zinc-50">{row.composite.toFixed(1)}</div>
+            <div className={`hr-num text-lg font-black tracking-tight ${medal ? "hr-grad-text" : "text-zinc-50"}`}>{row.composite.toFixed(1)}</div>
           </div>
-          <ChevronDown className={`h-4 w-4 text-zinc-600 transition-transform ${open ? "rotate-180" : ""}`} />
+          <ChevronDown className={`h-4 w-4 text-zinc-600 transition-transform duration-300 ${open ? "rotate-180 text-emerald-300" : ""}`} />
         </div>
       </button>
 
@@ -289,7 +344,7 @@ function RankItem({ row, index }: { row: RankRow; index: number }) {
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className="overflow-hidden"
           >
-            <RowDetail row={row} />
+            <RowDetail row={row} trend={trend} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -306,6 +361,26 @@ export function RankingsView({
 }) {
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("composite");
+  const [history, setHistory] = useState<HistoryResponse | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+
+  // load the score-history archive (silent-fail: sparklines are optional sugar)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/history", { cache: "no-store" });
+        if (!res.ok) return;
+        const j = (await res.json()) as HistoryResponse;
+        if (!cancelled) setHistory(j);
+      } catch {
+        /* optional feature — ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // "/" focuses search (standard data-table UX)
   useEffect(() => {
@@ -337,6 +412,52 @@ export function RankingsView({
     }
   }
 
+  /** UTF-8-BOM CSV of today's top-25 (Excel-friendly, Persian headers) */
+  function exportCsv() {
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["رتبه", "نام", "نماد", "امتیاز هولدرادار", "بازده سالانه هولدر", "سهم هولدر", "نسبت عرضه در گردش", "قیمت (USD)", "ارزش بازار (USD)", "TVL (USD)", "تغییر ۹۰روزه (%)", "رتبهٔ دیروز", "تغییر رتبه"];
+    const lines = data.rows.slice(0, 25).map((r) =>
+      [
+        r.rank,
+        r.name,
+        r.symbol,
+        r.composite.toFixed(1),
+        r.holderYieldAnnual != null ? (r.holderYieldAnnual * 100).toFixed(2) : "",
+        r.holderShare != null ? (r.holderShare * 100).toFixed(1) : "",
+        r.circRatio != null ? (r.circRatio * 100).toFixed(1) : "",
+        r.price != null ? r.price : "",
+        r.marketCap != null ? r.marketCap : "",
+        r.tvl != null ? r.tvl : "",
+        r.priceChange90d != null ? r.priceChange90d : "",
+        r.prevRank ?? "جدید",
+        r.rankChange != null ? (r.rankChange > 0 ? "+" + r.rankChange : String(r.rankChange)) : "",
+      ]
+        .map(esc)
+        .join(",")
+    );
+    const csv = "\uFEFF" + header.map(esc).join(",") + "\n" + lines.join("\n");
+    downloadBlob(`holdradar-${data.date}.csv`, csv, "text/csv;charset=utf-8");
+    toast({ title: "فایل CSV دانلود شد", description: `holdradar-${data.date}.csv` });
+  }
+
+  /** raw JSON export of today's top-25 with formula metadata */
+  function exportJson() {
+    const payload = {
+      site: "HoldRadar",
+      date: data.date,
+      computedAt: data.computedAt,
+      poolSize: data.poolSize,
+      weights: data.weights,
+      coverage: data.coverage,
+      rows: data.rows.slice(0, 25).map(({ sub, ...rest }) => ({
+        ...rest,
+        subScores: Object.fromEntries(Object.entries(sub).map(([k, v]) => [k, v?.score ?? null])),
+      })),
+    };
+    downloadBlob(`holdradar-${data.date}.json`, JSON.stringify(payload, null, 2), "application/json");
+    toast({ title: "فایل JSON دانلود شد", description: `holdradar-${data.date}.json` });
+  }
+
   const rows = useMemo(() => {
     let r = [...data.rows];
     if (query.trim()) {
@@ -357,6 +478,9 @@ export function RankingsView({
     return r.sort((a, b) => val(b) - val(a));
   }, [data.rows, query, sortBy]);
 
+  const metaBtn =
+    "inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-zinc-400 transition-all duration-200 hover:border-emerald-400/30 hover:bg-emerald-400/[0.05] hover:text-emerald-300 active:scale-95";
+
   return (
     <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
       {/* meta strip */}
@@ -369,37 +493,57 @@ export function RankingsView({
               <TrendingUp className="h-3 w-3" /> مقایسه با: <span className="hr-num text-zinc-300" dir="ltr">{data.prevDate}</span>
             </span>
           )}
+          {history && history.days > 1 && (
+            <span className="flex items-center gap-1.5">
+              <Archive className="h-3 w-3" /> آرشیو: <span className="hr-num text-zinc-300">{history.days}</span> روز
+            </span>
+          )}
           <span className="flex items-center gap-1.5"><Lock className="h-3 w-3" /> نشست فعال: <LiveCountdown expiresAt={data.sessionExpiresAt} /></span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={shareTop}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-zinc-400 transition hover:border-emerald-400/30 hover:text-emerald-300"
-          >
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={shareTop} className={metaBtn} title="کپی خلاصهٔ متنی در کلیپ‌بورد">
             <Share2 className="h-3 w-3" /> اشتراک‌گذاری
           </button>
-          <button onClick={onMethodology} className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-zinc-400 transition hover:border-emerald-400/30 hover:text-emerald-300">
+          <button onClick={exportCsv} className={metaBtn} title="دانلود CSV برای اکسل">
+            <FileSpreadsheet className="h-3 w-3" /> CSV
+          </button>
+          <button onClick={exportJson} className={metaBtn} title="دانلود JSON خام">
+            <FileJson className="h-3 w-3" /> JSON
+          </button>
+          <button onClick={() => setArchiveOpen(true)} className={metaBtn} title="رتبه‌بندی روزهای گذشته">
+            <Archive className="h-3 w-3" /> آرشیو
+          </button>
+          <button onClick={onMethodology} className={metaBtn}>
             روش‌شناسی و فرمول امتیاز
           </button>
         </div>
       </div>
 
-      <TopPodium rows={data.rows} />
+      <TopPodium rows={data.rows} trends={history?.trends} />
 
       {/* controls */}
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+          <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600 transition-colors peer-focus:text-emerald-300" />
           <Input
             id="hr-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="جست‌وجو در نام یا نماد… (کلید /)"
-            className="h-10 border-white/10 bg-black/25 pr-9 text-xs transition focus-visible:border-emerald-400/40"
+            className="peer h-10 border-white/10 bg-black/25 pr-9 text-xs transition-all duration-200 focus-visible:border-emerald-400/40 focus-visible:shadow-[0_0_0_3px_rgba(0,210,140,0.08)]"
           />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              aria-label="پاک‌کردن جست‌وجو"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-[10px] text-zinc-500 transition hover:bg-white/5 hover:text-zinc-300"
+            >
+              پاک‌کردن
+            </button>
+          )}
         </div>
         <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="h-10 w-full border-white/10 bg-black/25 text-xs sm:w-48">
+          <SelectTrigger className="h-10 w-full border-white/10 bg-black/25 text-xs transition-colors hover:border-emerald-400/20 sm:w-48">
             <SelectValue placeholder="مرتب‌سازی" />
           </SelectTrigger>
           <SelectContent className="border-white/10 bg-[#0B0E14]">
@@ -416,8 +560,8 @@ export function RankingsView({
 
       {/* rows */}
       <div className="mt-4 flex flex-col gap-2">
-        {rows.map((r, i) => (
-          <RankItem key={r.id} row={r} index={data.rows.indexOf(r)} />
+        {rows.map((r) => (
+          <RankItem key={r.id} row={r} index={data.rows.indexOf(r)} trend={history?.trends?.[r.id]} />
         ))}
         {rows.length === 0 && (
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-8 text-center text-xs text-zinc-500">
@@ -437,6 +581,8 @@ export function RankingsView({
           امتیاز می‌دهد؛ ناشناخته، خوب حساب نمی‌شود.
         </span>
       </div>
+
+      <HistoryDialog open={archiveOpen} onOpenChange={setArchiveOpen} history={history} />
     </motion.section>
   );
 }

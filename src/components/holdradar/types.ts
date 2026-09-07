@@ -78,3 +78,26 @@ export interface RankingsResponse {
   rows: RankRow[];
   sessionExpiresAt: number;
 }
+
+/* ------- /api/history (session-gated) ------- */
+
+export interface TrendPoint {
+  d: string; // YYYY-MM-DD
+  s: number; // composite score
+  r: number; // rank that day
+}
+
+export interface HistorySnapshot {
+  date: string;
+  computedAt: string;
+  scoredCount: number;
+  poolSize: number;
+  avgScore: number | null;
+  top: { id: string; name: string; symbol: string; image: string; composite: number; rank: number }[];
+}
+
+export interface HistoryResponse {
+  days: number;
+  snapshots: HistorySnapshot[];
+  trends: Record<string, TrendPoint[]>;
+}
