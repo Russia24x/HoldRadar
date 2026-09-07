@@ -38,6 +38,8 @@ export interface ScoredRow {
   priceChange90d: number | null; // %
   tvl: number | null;
   tvlGrowth30d: number | null; // % vs previous snapshot (null first day)
+  prevRank: number | null; // rank in the previous daily snapshot (null = new)
+  rankChange: number | null; // positive = moved up vs yesterday
   // normalized sub-scores
   sub: Partial<Record<(typeof CRITERIA)[number]["key"], SubScore>>;
   composite: number; // 0..100
@@ -47,6 +49,7 @@ export interface ScoredRow {
 export interface PoolRow extends CoinMarkets {
   defi?: DefiData["byGecko"] extends Map<string, infer V> ? V : never;
   prevTvl?: number | null;
+  prevRank?: number | null;
   tvlSource?: "protocol" | "chain";
 }
 
@@ -250,6 +253,8 @@ export function scorePool(pool: PoolRow[]): ScoreResult {
       priceChange90d: pc90,
       tvl,
       tvlGrowth30d,
+      prevRank: c.prevRank ?? null,
+      rankChange: null,
       sub,
       composite: Math.round(composite * 10) / 10,
       effectiveWeights,
@@ -257,7 +262,11 @@ export function scorePool(pool: PoolRow[]): ScoreResult {
   });
 
   rows.sort((a, b) => b.composite - a.composite);
-  rows.forEach((r, i) => (r.rank = i + 1));
+  rows.forEach((r, i) => {
+    r.rank = i + 1;
+    // positive = improved position vs yesterday; negative = dropped; null = new entrant
+    r.rankChange = r.prevRank != null ? r.prevRank - r.rank : null;
+  });
 
   // coverage stats (honest reporting, shown in methodology)
   const coverage: Record<string, { covered: number; total: number; pct: number }> = {};

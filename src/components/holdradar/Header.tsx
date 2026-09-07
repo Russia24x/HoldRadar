@@ -22,20 +22,20 @@ export function Header({
       transition={{ duration: 0.5, ease: "easeOut" }}
       className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#07090D]/80 backdrop-blur-xl"
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-3">
-          <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10 ring-1 ring-emerald-400/30">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-400/10 ring-1 ring-emerald-400/30">
             <Radar className="h-5 w-5 text-emerald-300" strokeWidth={1.8} />
           </div>
-          <div className="leading-tight">
-            <div className="text-base font-extrabold tracking-tight">
+          <div className="min-w-0 leading-tight">
+            <div className="truncate text-base font-extrabold tracking-tight">
               Hold<span className="text-emerald-300">Radar</span>
             </div>
             <div className="hidden text-[11px] text-zinc-500 sm:block">رادار ارزش برای هولدر</div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <span
             className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium md:inline-flex ${
               fresh
@@ -44,7 +44,13 @@ export function Header({
             }`}
           >
             <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${fresh ? "hr-pulse bg-emerald-400" : "bg-zinc-500"}`} />
-            {snapshotAgeHours == null ? "در حال آماده‌سازی داده" : fresh ? "اسنپ‌شات روزانه آماده" : `اسنپ‌شات ${snapshotAgeHours}h قبل`}
+            {snapshotAgeHours == null
+              ? "در حال آماده‌سازی داده"
+              : snapshotAgeHours < 1
+                ? `به‌روزرسانی ${Math.max(1, Math.round(snapshotAgeHours * 60))} دقیقه پیش`
+                : fresh
+                  ? "اسنپ‌شات روزانه آماده"
+                  : `به‌روزرسانی ${Math.round(snapshotAgeHours)} ساعت پیش`}
           </span>
 
           <button

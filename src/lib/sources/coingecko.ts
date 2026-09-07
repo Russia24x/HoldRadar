@@ -35,17 +35,31 @@ const store = globalThis as unknown as { __hrCgCache?: Map<string, CacheEntry<un
 const cache: Map<string, CacheEntry<unknown>> = store.__hrCgCache ?? new Map();
 store.__hrCgCache = cache;
 
+/** fetch with 3 retry attempts + exponential backoff (429/5xx aware). */
 async function cachedJson<T>(key: string, url: string, ttl = TTL_MS): Promise<T> {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.t < ttl) return hit.v as T;
-  const res = await fetch(url, {
-    headers: { accept: "application/json", "user-agent": "HoldRadar/1.0" },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!res.ok) throw new Error(`CoinGecko ${res.status} for ${key}`);
-  const v = (await res.json()) as T;
-  cache.set(key, { t: Date.now(), v });
-  return v;
+
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { accept: "application/json", "user-agent": "HoldRadar/1.0" },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (res.status === 429 || res.status >= 500) {
+        throw new Error(`CoinGecko ${res.status} (attempt ${attempt})`);
+      }
+      if (!res.ok) throw new Error(`CoinGecko ${res.status} for ${key}`);
+      const v = (await res.json()) as T;
+      cache.set(key, { t: Date.now(), v });
+      return v;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2500));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("CoinGecko failed");
 }
 
 /** Top N coins by market cap (fixed per_page=250, page semantics → slice). */

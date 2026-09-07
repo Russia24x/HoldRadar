@@ -23,6 +23,7 @@ export interface SnapshotView {
   scoredCount: number;
   coverage: Record<string, { covered: number; total: number; pct: number }>;
   weights: { key: string; label: string; weight: number; formula: string }[];
+  prevDate: string | null;
   rows: ScoredRow[];
 }
 
@@ -44,6 +45,7 @@ export async function getLatestSnapshot(): Promise<SnapshotView | null> {
       weight: c.weight,
       formula: c.formula,
     })),
+    prevDate: snap.prevDate ?? null,
     rows: (snap.rows as ScoredRow[]).slice(0, SITE.topN),
   };
 }
@@ -90,9 +92,11 @@ export async function runPipeline(
       orderBy: { computedAt: "desc" },
     });
     const prevTvlMap = new Map<string, number>();
+    const prevRankMap = new Map<string, number>();
     if (prev) {
       for (const r of prev.rows as ScoredRow[]) {
         if (r.tvl != null && r.tvl > 0) prevTvlMap.set(r.id, r.tvl);
+        if (r.rank != null) prevRankMap.set(r.id, r.rank);
       }
     }
 
@@ -115,7 +119,13 @@ export async function runPipeline(
           tvlSource = "chain";
         }
       }
-      return { ...c, defi: defiRec, prevTvl: prevTvlMap.get(c.id) ?? null, tvlSource };
+      return {
+        ...c,
+        defi: defiRec,
+        prevTvl: prevTvlMap.get(c.id) ?? null,
+        prevRank: prevRankMap.get(c.id) ?? null,
+        tvlSource,
+      };
     });
 
     const { rows, coverage } = scorePool(pool);

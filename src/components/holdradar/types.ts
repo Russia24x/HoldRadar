@@ -59,6 +59,8 @@ export interface RankRow {
   priceChange90d: number | null;
   tvl: number | null;
   tvlGrowth30d: number | null;
+  prevRank: number | null;
+  rankChange: number | null; // positive = up vs yesterday
   sub: Partial<Record<string, SubScore>>;
   composite: number;
   effectiveWeights: Record<string, number>;
@@ -72,6 +74,7 @@ export interface RankingsResponse {
   scoredCount: number;
   coverage: Record<string, { covered: number; total: number; pct: number }>;
   weights: { key: string; label: string; weight: number; formula: string }[];
+  prevDate: string | null;
   rows: RankRow[];
   sessionExpiresAt: number;
 }

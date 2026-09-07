@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown,
@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Lock,
   RefreshCw,
+  Share2,
   ChartColumn as ChartIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { fmtCompactUsd, fmtPct, fmtPrice, fmtFaDateTime, fmtCountdown, fmtNum } from "./format";
+import { toast } from "@/hooks/use-toast";
+import { fmtCompactUsd, fmtPct, fmtPrice, fmtFaDateTime, fmtNum } from "./format";
+import { RankDelta, LiveCountdown, Change90Chip } from "./badges";
 import type { RankingsResponse, RankRow } from "./types";
 
 const CRITERIA_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -88,9 +91,10 @@ function TopPodium({ rows }: { rows: RankRow[] }) {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.12, duration: 0.5 }}
-            className={`hr-card relative overflow-hidden rounded-2xl p-5 ring-1 ${m.ring}`}
+            className={`hr-card relative overflow-hidden rounded-2xl p-5 ring-1 transition-shadow hover:shadow-[0_12px_40px_-12px_rgba(0,210,140,0.25)] ${m.ring}`}
           >
             <div className={`absolute inset-x-0 top-0 h-[2px] ${m.bg}`} />
+            {i === 0 && <div className="pointer-events-none absolute -inset-x-8 -top-8 h-24 bg-gradient-to-b from-amber-300/[0.07] to-transparent blur-xl" />}
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 {r.image ? (
@@ -104,7 +108,10 @@ function TopPodium({ rows }: { rows: RankRow[] }) {
                   <div className="text-[11px] uppercase text-zinc-500">{r.symbol}</div>
                 </div>
               </div>
-              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${m.bg} ${m.text}`}>{m.label}</div>
+              <div className="flex flex-col items-end gap-1">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${m.bg} ${m.text}`}>{m.label}</div>
+                <RankDelta change={r.rankChange} isNew={r.prevRank == null} />
+              </div>
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div>
@@ -183,6 +190,7 @@ function RowDetail({ row }: { row: RankRow }) {
             ["تغییر قیمت ۹۰روزه", fmtPct(row.priceChange90d, 1)],
             ["TVL", fmtCompactUsd(row.tvl)],
             ["رشد TVL", row.tvlGrowth30d != null ? fmtPct(row.tvlGrowth30d, 1) : "—"],
+            ["رتبهٔ دیروز", row.prevRank != null ? "#" + row.prevRank : "جدید"],
             ["عرضهٔ در گردش", row.circulatingSupply != null ? fmtNum(row.circulatingSupply) : "—"],
           ].map(([label, val]) => (
             <div key={label as string} className="flex items-center justify-between rounded-lg bg-white/[0.03] px-3 py-2">
@@ -213,11 +221,18 @@ function RankItem({ row, index }: { row: RankRow; index: number }) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.03, 0.4) }}
-      className="hr-card overflow-hidden rounded-xl"
+      className={`hr-card overflow-hidden rounded-xl transition-colors ${open ? "border-emerald-400/20" : ""}`}
     >
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 px-4 py-3 text-right transition hover:bg-white/[0.02] sm:px-5">
-        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-black ${medal ? medal.bg + " " + medal.text : "bg-white/[0.05] text-zinc-500"}`}>
-          <span className="hr-num">{row.rank}</span>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="group flex w-full items-center gap-2 px-3 py-3 text-right outline-none transition hover:bg-emerald-400/[0.03] focus-visible:ring-2 focus-visible:ring-emerald-400/40 sm:gap-3 sm:px-5"
+      >
+        <div className="flex shrink-0 flex-col items-center gap-1">
+          <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${medal ? medal.bg + " " + medal.text : "bg-white/[0.05] text-zinc-500"}`}>
+            <span className="hr-num">{row.rank}</span>
+          </div>
+          <RankDelta change={row.rankChange} isNew={row.prevRank == null} />
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -247,6 +262,11 @@ function RankItem({ row, index }: { row: RankRow; index: number }) {
         <div className="hidden w-20 shrink-0 text-left lg:block">
           <div className="text-[9px] text-zinc-500">ارزش بازار</div>
           <div className="hr-num text-[11px] font-semibold text-zinc-300">{fmtCompactUsd(row.marketCap)}</div>
+        </div>
+
+        <div className="hidden w-16 shrink-0 text-left lg:block">
+          <div className="text-[9px] text-zinc-500">۹۰روزه</div>
+          <Change90Chip value={row.priceChange90d} />
         </div>
 
         <div className="hidden shrink-0 sm:block"><SubScoreDots row={row} /></div>
@@ -287,6 +307,36 @@ export function RankingsView({
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("composite");
 
+  // "/" focuses search (standard data-table UX)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (e.key === "/" && !typing) {
+        e.preventDefault();
+        document.getElementById("hr-search")?.focus();
+      }
+      if (e.key === "Escape" && target?.id === "hr-search") (target as HTMLInputElement).blur();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  /** share a compact Persian text summary of today's top-25 */
+  async function shareTop() {
+    const lines = data.rows.slice(0, 25).map((r) => `${r.rank}. ${r.name} (${r.symbol}) — ${r.composite.toFixed(1)}`);
+    const text =
+      `🛰 HoldRadar — ۲۵ دارایی برتر «امتیاز ارزش برای هولدر»\n` +
+      `📅 ${fmtFaDateTime(data.computedAt)}\n\n` +
+      lines.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "خلاصهٔ رتبه‌بندی کپی شد", description: "می‌توانید در هر جایی paste کنید." });
+    } catch {
+      toast({ title: "کپی ناموفق بود", variant: "destructive" });
+    }
+  }
+
   const rows = useMemo(() => {
     let r = [...data.rows];
     if (query.trim()) {
@@ -307,8 +357,6 @@ export function RankingsView({
     return r.sort((a, b) => val(b) - val(a));
   }, [data.rows, query, sortBy]);
 
-  const msLeft = data.sessionExpiresAt ? data.sessionExpiresAt - Date.now() : 0;
-
   return (
     <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
       {/* meta strip */}
@@ -316,11 +364,24 @@ export function RankingsView({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
           <span className="flex items-center gap-1.5 text-zinc-300"><RefreshCw className="h-3.5 w-3.5 text-emerald-300" /> {fmtFaDateTime(data.computedAt)}</span>
           <span className="flex items-center gap-1.5"><Database className="h-3 w-3" /> جامعهٔ نامزدها: <span className="hr-num text-zinc-300">{data.poolSize}</span> دارایی</span>
-          <span className="flex items-center gap-1.5"><Lock className="h-3 w-3" /> نشست فعال: {fmtCountdown(msLeft)}</span>
+          {data.prevDate && (
+            <span className="flex items-center gap-1.5" title={`تغییر رتبه‌ها نسبت به اسنپ‌شات ${data.prevDate} محاسبه شده`}>
+              <TrendingUp className="h-3 w-3" /> مقایسه با: <span className="hr-num text-zinc-300" dir="ltr">{data.prevDate}</span>
+            </span>
+          )}
+          <span className="flex items-center gap-1.5"><Lock className="h-3 w-3" /> نشست فعال: <LiveCountdown expiresAt={data.sessionExpiresAt} /></span>
         </div>
-        <button onClick={onMethodology} className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-zinc-400 transition hover:border-emerald-400/30 hover:text-emerald-300">
-          روش‌شناسی و فرمول امتیاز
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={shareTop}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-zinc-400 transition hover:border-emerald-400/30 hover:text-emerald-300"
+          >
+            <Share2 className="h-3 w-3" /> اشتراک‌گذاری
+          </button>
+          <button onClick={onMethodology} className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-zinc-400 transition hover:border-emerald-400/30 hover:text-emerald-300">
+            روش‌شناسی و فرمول امتیاز
+          </button>
+        </div>
       </div>
 
       <TopPodium rows={data.rows} />
@@ -330,10 +391,11 @@ export function RankingsView({
         <div className="relative flex-1">
           <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
           <Input
+            id="hr-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="جست‌وجو در نام یا نماد…"
-            className="h-10 border-white/10 bg-black/25 pr-9 text-xs"
+            placeholder="جست‌وجو در نام یا نماد… (کلید /)"
+            className="h-10 border-white/10 bg-black/25 pr-9 text-xs transition focus-visible:border-emerald-400/40"
           />
         </div>
         <Select value={sortBy} onValueChange={setSortBy}>
