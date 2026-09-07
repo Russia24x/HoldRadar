@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// KV-equivalent: kv:used-payments — one settled payment can only ever mint one session
+model UsedPayment {
+  id        String   @id // "<chain>:<txhash>" canonical dedup key
+  chain     String // "abstract" | "solana"
+  asset     String // ETH | USDC.e | SOL | PENGU | USDC
+  txHash    String
+  amountRaw String? // raw on-chain amount (wei / lamports / base units)
+  amountUsd Float?
+  payer     String?
+  sessionId String?
+  usedAt    DateTime @default(now())
+
+  @@index([usedAt])
+}
+
+// KV-equivalent: kv:rankings:latest — the daily computed snapshot
+model RankingSnapshot {
+  id          String   @id @default(cuid())
+  date        String   @unique // YYYY-MM-DD (UTC)
+  computedAt  DateTime
+  pipelineMs  Int      @default(0)
+  poolSize    Int      @default(0) // candidate pool (top N by mcap)
+  scoredCount Int      @default(0) // rows with at least one usable subscore
+  weightsUsed Json // weights + redistribution info
+  coverage    Json // per-criterion coverage stats
+  rows        Json // full scored rows (sorted by composite score)
+  prevDate    String? // snapshot id/date used for TVL trend
+  sources     Json? // fetch log summary
+
+  @@index([computedAt])
+}
+
+// Audit trail of issued sessions (token itself is stateless HMAC)
+model SessionRecord {
+  id        String   @id // token id (random uuid)
+  source    String // payment | owner | qa
+  chain     String?
+  payer     String?
+  txHash    String?
+  issuedAt  DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+// Pipeline run log (daily cron / on-demand)
+model DataFetchLog {
+  id          String    @id @default(cuid())
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  status      String // running | ok | error
+  trigger     String // cron | stale | manual
+  error       String?
+  poolSize    Int?
+  scoredCount Int?
+  durationMs  Int?
+}
+
+// One-time nonces for treasury-owner message-signing challenges
+model OwnerChallenge {
+  id        String   @id @default(cuid())
+  nonce     String   @unique
+  chain     String // abstract | solana
+  address   String
+  message   String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  used      Boolean  @default(false)
+}
