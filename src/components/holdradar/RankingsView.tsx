@@ -23,6 +23,9 @@ import {
   FileJson,
   Crown,
   LineChart,
+  ArrowUp,
+  ArrowDown,
+  Sparkles,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -280,6 +283,7 @@ function RankItem({ row, index, trend }: { row: RankRow; index: number; trend?: 
       className={`hr-card overflow-hidden rounded-xl transition-all duration-200 hover:border-emerald-400/15 ${open ? "border-emerald-400/20 shadow-[0_8px_30px_-14px_rgba(0,210,140,0.2)]" : ""}`}
     >
       <button
+        data-hr-row={index}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className="group flex w-full items-center gap-2 px-3 py-3 text-right outline-none transition hover:bg-emerald-400/[0.03] focus-visible:ring-2 focus-visible:ring-emerald-400/40 sm:gap-3 sm:px-5"
@@ -382,7 +386,7 @@ export function RankingsView({
     };
   }, []);
 
-  // "/" focuses search (standard data-table UX)
+  // "/" focuses search; ↑/↓ walk rows; Enter toggles (standard data-table UX)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -392,6 +396,22 @@ export function RankingsView({
         document.getElementById("hr-search")?.focus();
       }
       if (e.key === "Escape" && target?.id === "hr-search") (target as HTMLInputElement).blur();
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !typing) {
+        const btns = Array.from(document.querySelectorAll<HTMLElement>("[data-hr-row]"));
+        if (!btns.length) return;
+        e.preventDefault();
+        const cur = btns.indexOf(document.activeElement as HTMLElement);
+        const next =
+          cur === -1
+            ? e.key === "ArrowDown"
+              ? 0
+              : btns.length - 1
+            : e.key === "ArrowDown"
+              ? Math.min(cur + 1, btns.length - 1)
+              : Math.max(cur - 1, 0);
+        btns[next]?.focus();
+        btns[next]?.scrollIntoView({ block: "nearest" });
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -457,6 +477,27 @@ export function RankingsView({
     downloadBlob(`holdradar-${data.date}.json`, JSON.stringify(payload, null, 2), "application/json");
     toast({ title: "فایل JSON دانلود شد", description: `holdradar-${data.date}.json` });
   }
+
+  /** daily movement stats across today's top-N (vs previous snapshot) */
+  const pulse = useMemo(() => {
+    let up = 0, down = 0, same = 0, fresh = 0;
+    for (const r of data.rows) {
+      if (r.prevRank == null) fresh++;
+      else if ((r.rankChange ?? 0) > 0) up++;
+      else if ((r.rankChange ?? 0) < 0) down++;
+      else same++;
+    }
+    return { up, down, same, fresh, hasPrev: data.rows.some((r) => r.prevRank != null) };
+  }, [data.rows]);
+
+  /** back-to-top visibility */
+  const [showTop, setShowTop] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 700);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const rows = useMemo(() => {
     let r = [...data.rows];
@@ -558,6 +599,28 @@ export function RankingsView({
         </Select>
       </div>
 
+      {/* daily pulse + keyboard hint */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px]">
+        {pulse.hasPrev ? (
+          <div className="flex flex-wrap items-center gap-1.5 text-zinc-500">
+            <span className="text-zinc-600">نبض امروز:</span>
+            <span className="hr-num inline-flex items-center gap-1 rounded-md bg-emerald-400/10 px-2 py-1 font-bold text-emerald-300"><ArrowUp className="h-3 w-3" />{pulse.up} صعود</span>
+            <span className="hr-num inline-flex items-center gap-1 rounded-md bg-red-400/10 px-2 py-1 font-bold text-red-300"><ArrowDown className="h-3 w-3" />{pulse.down} نزول</span>
+            <span className="hr-num inline-flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-1 font-bold text-zinc-400">{pulse.same} ثابت</span>
+            <span className="hr-num inline-flex items-center gap-1 rounded-md bg-amber-400/10 px-2 py-1 font-bold text-amber-300"><Sparkles className="h-3 w-3" />{pulse.fresh} ورود جدید</span>
+          </div>
+        ) : (
+          <span className="text-zinc-600">اولین روز آرشیو — نبض روزانه از فردا فعال می‌شود.</span>
+        )}
+        <span className="hidden items-center gap-1 text-zinc-600 sm:flex" dir="rtl">
+          <kbd className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px]">↑</kbd>
+          <kbd className="rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px]">↓</kbd>
+          پیمایش ردیف‌ها
+          <kbd className="mx-1 rounded border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[9px]">Enter</kbd>
+          جزئیات
+        </span>
+      </div>
+
       {/* rows */}
       <div className="mt-4 flex flex-col gap-2">
         {rows.map((r) => (
@@ -583,6 +646,22 @@ export function RankingsView({
       </div>
 
       <HistoryDialog open={archiveOpen} onOpenChange={setArchiveOpen} history={history} />
+
+      {/* back-to-top */}
+      <AnimatePresence>
+        {showTop && (
+          <motion.button
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            aria-label="بازگشت به بالای صفحه"
+            className="fixed bottom-6 left-6 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-emerald-400/25 bg-[#0B0E14]/90 text-emerald-300 shadow-[0_8px_24px_-8px_rgba(0,210,140,0.4)] backdrop-blur transition-all hover:border-emerald-400/50 hover:bg-emerald-400/10 active:scale-95"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </motion.section>
   );
 }
