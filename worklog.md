@@ -125,3 +125,31 @@ Stage Summary:
 - دادهٔ دو روزهٔ واقعی + تمام فیچرهای روند فعال و تست‌شده؛ صفر خطای runtime
 - ریسک/نکتهٔ محیطی: OOM در sessions طولانی → اگر سرور مردود بود: batch-mode QA (سرور+تست در یک دستور)؛ supervisor خودش recovery می‌کند
 - توصیهٔ دور بعد: ۱) ادامهٔ آرشیو روزانه را خودکار نگه دارید (هر session بعد از نیمه‌شب UTC یک force refresh، یا در deploy واقعی Cron Trigger) ۲) تست پرداخت واقعی mainnet با کیف‌پول کاربر (فقط مانع Definition of Done #2) ۳) پورت به Cloudflare Worker تک‌فایلی طبق بریف اگر deploy خواسته شد ۴) اختیاری: sparkline رتبه (نه فقط امتیاز)، مقایسهٔ دو روز انتخابی در آرشیو
+
+---
+
+Task ID: agw-1
+Agent: main (Z.ai Code)
+Task: خواندن کامل مستندات AGW (docs.abs.xyz/abstract-global-wallet + build.abs.xyz/AGW Reusables) و اصلاح/تکمیل پروژه بر اساس آن‌ها
+
+Work Log:
+- Sync check اولیه: divergence ساختگی (commit تکراری push-نشده با محتوای یکسان) → mixed reset به origin/main (6782859) بدون force push؛ کار محلی حفظ شد
+- دانلود ۳۵ صفحهٔ markdown خام AGW از docs.abs.xyz (ترفند `.md` مینت‌لیفت) + ۱۱ صفحهٔ build.abs.xyz (AGW Reusables) + ۵ فایل JSON رجیستری shadcn آن‌ها (`/r/<name>.json`)
+- مستندات کلیدی خوانده شد: native-integration، AbstractWalletProvider، useAbstractClient/useLoginWithAbstract، sendTransaction/writeContract، FAQ (AGW فقط روی Abstract کار می‌کند)، connect-to-abstract (explorer = abscan.org!)، x402 accepting/making-payments، AGW Reusables (agw-provider/connect-wallet-button/abstract-contracts)
+- نصب پکیج‌ها طبق مستندات: @abstract-foundation/agw-react@1.13.0 + agw-client@1.12.3 + wagmi@2.19.5 (طبق peerdeps؛ اول wagmi@3 نصب شد که با docs ناسازگار بود → به v2 برگشت) + viem@2.56.3
+- ساخت `src/config/chain.ts` (mainnet `abstract` پیش‌فرض؛ testnet فقط با NEXT_PUBLIC_AGW_CHAIN=testnet)
+- ساخت `src/components/agw/AgwProvider.tsx` (NextAbstractWalletProvider با QueryClient مشترک) → wrap در layout.tsx
+- ساخت `src/components/agw/AgwPaySection.tsx`: login() مودال میزبانی‌شده AGW → نمایش آدرس/موجودی (useBalance با token برای USDC.e) → sendTransaction برای ETH و writeContract(transfer) برای USDC.e → هش → تأیید خودکار با retry ۳ مرحله‌ای برای TX_NOT_FOUND
+- PaymentDialog: AgwPaySection روش اصلی Abstract؛ کیف‌پول EVM تزریقی به روش ثانویه تنزل یافت؛ submit(hashArg?) برای تأیید خودکار
+- OwnerDialog: دکمهٔ «اتصال AGW و امضا» (signMessage از AbstractClient) بالای روش‌های قبلی
+- سرور: `src/lib/verify/erc1271.ts` — fallback ERC-1271 (isValidSignature با eth_call، هر دو قرارداد hash EIP-191 و raw) برای وقتی خزانهٔ Abstract کیف‌پول قراردادی AGW باشد؛ owner/verify این مسیر را بعد از EIP-191 می‌آزماید
+- x402 هم‌ترازی: `accepts[]` با فرمت دقیق x402 (scheme exact/price/network/payTo/asset/description) در بدنهٔ 402 + هدرهای `x-pay: x402` و `x-pay-schemes: exact`
+- اصلاح explorer URL: explorer.mainnet.abs.xyz → abscan.org (config.ts + wallets.ts) طبق docs
+- اعتبارسنجی متقاطع: آدرس USDC (0x84A71...87e1) در رجیستری رسمی AGW Reusables عیناً تأیید شد
+- QA با agent-browser: صفحهٔ قفل بدون خطای console؛ دیالوگ پرداخت → Abstract → ETH/USDC.e → AGW Section با قیمت زنده ($2483.96)؛ **مودال رسمی AGW باز شد** (Welcome to Abstract / Email / Google / Wallet / Passkey)؛ فلوی cross-app-connect به portal.abs.xyz با requester_origin درست هم تست شد؛ OwnerDialog چالش + دکمهٔ AGW؛ موبایل 390px بدون overflow؛ HTML قفل بدون term داده (paywall integrity)؛ rankings بدون نشست 401؛ امضای نامعتبر مالک → ERC-1271 فراخوانی و رد (403)
+- lint پاک؛ tsc: خطاهای جدید صفر (خطاهای قدیمی pipeline/history دست‌نخورده)؛ commit+push: b5f3bcd
+
+Stage Summary:
+- AGW رسمی و کامل ادغام شد (پرداخت + ورود مالک)؛ x402 فرمت‌پذیر؛ ERC-1271 برای خزانهٔ قراردادی؛ explorer درست
+- Crossmint fiat on-ramp مستند بود اما نیاز به حساب/کلید API خارجی دارد → طبق قید «بدون سرویس خارجی» ادغام نشد (در صورت تغییر نظر کاربر قابل افزودن است)
+- باقی‌مانده: تست پرداخت واقعی mainnet با کیف‌پول واقعی کاربر (تعریف تمام‌شدگی #۲ بریف)؛ پورت به Cloudflare Worker اگر deploy خواسته شد
