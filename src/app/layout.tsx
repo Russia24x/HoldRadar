@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Vazirmatn } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { NextAbstractWalletProvider } from "@/components/agw/AgwProvider";
 
 const vazirmatn = Vazirmatn({
   variable: "--font-vazirmatn",
@@ -38,8 +39,10 @@ export default function RootLayout({
       <body
         className={`${vazirmatn.variable} font-sans antialiased bg-[#07090D] text-zinc-100 min-h-screen flex flex-col`}
       >
-        {children}
-        <Toaster />
+        <NextAbstractWalletProvider>
+          {children}
+          <Toaster />
+        </NextAbstractWalletProvider>
       </body>
     </html>
   );

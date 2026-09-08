@@ -52,7 +52,7 @@ export const CHAINS: Record<ChainKey, ChainSpec> = {
     networkId: "eip155:2741",
     chainId: 2741,
     treasury: "0x60Df4E186364c3a49A550Aee29Da1d5fe3658818",
-    explorerTx: (h) => `https://explorer.mainnet.abs.xyz/tx/${h}`,
+    explorerTx: (h) => `https://abscan.org/tx/${h}`,
     assets: [
       {
         symbol: "ETH",
@@ -109,11 +109,28 @@ export const CHAINS: Record<ChainKey, ChainSpec> = {
   },
 };
 
-/** x402-style payment requirements returned with HTTP 402 */
+/** x402-style payment requirements returned with HTTP 402
+ *  (docs.abs.xyz/ai-agents/payments/x402 — "accepts" list mirrors the
+ *   x402 exact scheme: scheme/price/network/payTo). */
 export function paymentRequirements() {
   return {
     price: `$${SITE.priceUsd.toFixed(2)}`,
     maxAgeHours: SITE.sessionHours,
+    /** x402-compatible accepts list (scheme "exact" on each chain/asset) */
+    accepts: Object.values(CHAINS).flatMap((c) =>
+      c.assets.map((a) => ({
+        scheme: "exact",
+        price: `$${SITE.priceUsd.toFixed(2)}`,
+        network: c.networkId,
+        payTo: c.treasury,
+        asset:
+          a.kind === "native"
+            ? { symbol: a.symbol, decimals: a.decimals }
+            : { symbol: a.symbol, address: a.contract, decimals: a.decimals },
+        description: "HoldRadar daily top-25 holder-value ranking (24h session)",
+        maxAgeSeconds: 600,
+      }))
+    ),
     chains: Object.values(CHAINS).map((c) => ({
       network: c.networkId,
       label: c.label,

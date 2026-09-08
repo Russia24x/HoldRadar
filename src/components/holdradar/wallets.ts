@@ -80,7 +80,7 @@ export async function ensureAbstractChain(wallet: EvmWallet): Promise<void> {
             chainName: "Abstract",
             nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
             rpcUrls: ["https://api.mainnet.abs.xyz"],
-            blockExplorerUrls: ["https://explorer.mainnet.abs.xyz"],
+            blockExplorerUrls: ["https://abscan.org"],
           },
         ],
       });

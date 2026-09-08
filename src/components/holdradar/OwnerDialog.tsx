@@ -5,15 +5,90 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Crown, Loader2, ShieldCheck, Wallet, PenLine, Info, KeyRound } from "lucide-react";
+import { Crown, Loader2, ShieldCheck, Wallet, PenLine, Info, KeyRound, Sparkles } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { getEvmWallet, getSolanaWallet, evmSignMessage, bs58Encode } from "./wallets";
+import { useAccount } from "wagmi";
+import { useLoginWithAbstract, useAbstractClient } from "@abstract-foundation/agw-react";
 
 /**
  * Treasury-owner login (blueprint §7): server sends a one-time message,
  * owner signs it with their wallet, server recovers the signer and issues a
  * free session ONLY if it equals a treasury address.
+ *
+ * Abstract signing options:
+ *  - AGW (smart-contract wallet) — validated server-side via ERC-1271
+ *  - any injected EVM wallet (EOA) — validated via EIP-191 recovery
  */
+
+function AgwSignButton({
+  message,
+  disabled,
+  onSigned,
+  onAddress,
+}: {
+  message: string | null;
+  disabled?: boolean;
+  onSigned: (signature: string) => void;
+  onAddress: (address: string) => void;
+}) {
+  const { login } = useLoginWithAbstract();
+  const { address, isConnected, status } = useAccount();
+  const { data: abstractClient } = useAbstractClient();
+  const [signing, setSigning] = useState(false);
+  const connecting = status === "connecting" || status === "reconnecting";
+
+  async function sign() {
+    if (!abstractClient) {
+      toast({ title: "کیف‌پول AGW هنوز آماده نیست؛ دوباره تلاش کنید.", variant: "destructive" });
+      return;
+    }
+    if (!message) {
+      toast({ title: "چالشی برای امضا موجود نیست.", variant: "destructive" });
+      return;
+    }
+    setSigning(true);
+    try {
+      const signature = await abstractClient.signMessage({ message });
+      onAddress(address ?? "");
+      onSigned(signature);
+    } catch (e) {
+      toast({
+        title: "امضای AGW ناموفق بود",
+        description: e instanceof Error ? e.message.slice(0, 120) : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setSigning(false);
+    }
+  }
+
+  if (!isConnected) {
+    return (
+      <Button
+        onClick={() => login()}
+        disabled={disabled || connecting}
+        variant="outline"
+        className="h-10 w-full gap-2 border-emerald-400/25 bg-emerald-400/[0.04] text-xs text-emerald-200 hover:bg-emerald-400/[0.08]"
+      >
+        <Sparkles className="h-4 w-4" />
+        اتصال AGW و امضا
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      onClick={sign}
+      disabled={disabled || signing}
+      variant="outline"
+      className="h-10 w-full gap-2 border-emerald-400/25 bg-emerald-400/[0.04] text-xs text-emerald-200 hover:bg-emerald-400/[0.08]"
+    >
+      {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+      امضا با کیف‌پول جهانی
+    </Button>
+  );
+}
 
 type Phase = "form" | "sign" | "verifying" | "done";
 
@@ -170,10 +245,24 @@ export function OwnerDialog({
                 <pre dir="ltr" className="max-h-32 overflow-y-auto whitespace-pre-wrap font-mono text-[10px] leading-5 text-zinc-400">{challenge.message}</pre>
               </div>
 
+              {chain === "abstract" && (
+                <AgwSignButton
+                  message={challenge?.message ?? null}
+                  disabled={busy}
+                  onSigned={(sig) => {
+                    setSignature(sig);
+                    toast({ title: "امضای AGW انجام شد", description: "برای تأیید نهایی، «تأیید مالکیت» را بزنید." });
+                  }}
+                  onAddress={(a) => {
+                    if (a) setAddress(a);
+                  }}
+                />
+              )}
+
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Button onClick={signWithWallet} disabled={busy} variant="outline" className="h-10 w-full gap-2 border-white/15 bg-white/[0.03] text-xs hover:bg-white/[0.06]">
                   <Wallet className="h-4 w-4" />
-                  امضا با کیف‌پول
+                  امضا با کیف‌پول تزریقی
                 </Button>
                 <div className="flex items-center gap-2 rounded-lg border border-dashed border-white/15 px-3 text-[10px] text-zinc-600">
                   <PenLine className="h-3.5 w-3.5" />

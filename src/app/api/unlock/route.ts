@@ -80,7 +80,7 @@ export async function POST(req: Request) {
   if (!asset) {
     return NextResponse.json(
       { error: "دارایی پذیرفته‌شده نیست.", requirements: paymentRequirements() },
-      { status: 402 }
+      { status: 402, headers: { "x-pay": "x402", "x-pay-schemes": "exact" } }
     );
   }
 
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
         error: "پرداخت لازم است (HTTP 402).",
         requirements: paymentRequirements(),
       },
-      { status: 402 }
+      { status: 402, headers: { "x-pay": "x402", "x-pay-schemes": "exact" } }
     );
   }
 

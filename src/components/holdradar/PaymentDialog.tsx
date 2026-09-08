@@ -27,6 +27,7 @@ import {
   evmSignMessage,
   getEvmWallet,
 } from "./wallets";
+import { AgwPaySection } from "@/components/agw/AgwPaySection";
 
 type Step = "chain" | "asset" | "pay";
 
@@ -121,33 +122,53 @@ export function PaymentDialog({
       .catch(() => toast({ title: "کپی ناموفق بود", variant: "destructive" }));
   }, [chainData]);
 
-  async function submit() {
-    if (!st.chain || !st.asset || !st.txHash.trim()) return;
+  async function submit(hashArg?: string) {
+    const hash = (hashArg ?? st.txHash).trim();
+    if (!st.chain || !st.asset || !hash) return;
     setSt((s) => ({ ...s, phase: "verifying", error: undefined }));
-    try {
-      const res = await fetch("/api/unlock", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ chain: st.chain, asset: st.asset, txHash: st.txHash.trim() }),
-      });
-      const j = await res.json();
-      if (res.ok && j.ok) {
-        setSt((s) => ({ ...s, phase: "done" }));
-        toast({ title: "پرداخت تأیید شد ✅", description: "نشست ۲۴ ساعتهٔ شما فعال شد." });
-        setTimeout(() => {
-          onUnlocked();
-          onOpenChange(false);
-        }, 900);
-      } else {
+    // fresh txs may need a moment to be indexed by the RPC — retry a couple of times
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch("/api/unlock", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ chain: st.chain, asset: st.asset, txHash: hash }),
+        });
+        const j = await res.json();
+        if (res.ok && j.ok) {
+          setSt((s) => ({ ...s, phase: "done" }));
+          toast({ title: "پرداخت تأیید شد ✅", description: "نشست ۲۴ ساعتهٔ شما فعال شد." });
+          setTimeout(() => {
+            onUnlocked();
+            onOpenChange(false);
+          }, 900);
+          return;
+        }
+        const transient = j.code === "TX_NOT_FOUND" && attempt < 2;
+        if (transient) {
+          await new Promise((r) => setTimeout(r, 3000));
+          continue;
+        }
         setSt((s) => ({
           ...s,
           phase: "idle",
           error: j.error ?? `راستی‌آزمایی ناموفق بود (کد ${res.status}).`,
         }));
+        return;
+      } catch {
+        if (attempt >= 2) {
+          setSt((s) => ({ ...s, phase: "idle", error: "ارتباط با سرور برقرار نشد." }));
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 2500));
       }
-    } catch {
-      setSt((s) => ({ ...s, phase: "idle", error: "ارتباط با سرور برقرار نشد." }));
     }
+  }
+
+  /** AGW (Abstract Global Wallet) flow — tx hash comes straight from the wallet */
+  function handleAgwTx(hash: string) {
+    setSt((s) => ({ ...s, txHash: hash, error: undefined }));
+    void submit(hash);
   }
 
   /** in-browser EVM payment on Abstract (ETH native or USDC.e ERC-20) */
@@ -313,15 +334,36 @@ export function PaymentDialog({
                   )}
 
                   <div className={`flex flex-col gap-3 ${qrDataUrl ? "col-span-3" : "col-span-5"}`}>
-                    {/* in-browser wallet pay (EVM only) */}
+                    {/* PRIMARY on Abstract: Abstract Global Wallet (AGW) */}
+                    {st.chain === "abstract" && (
+                      <AgwPaySection
+                        treasury={chainData.treasury}
+                        asset={assetData}
+                        amount={amount}
+                        verifying={st.phase === "verifying"}
+                        hasHash={!!st.txHash.trim()}
+                        onTxSent={handleAgwTx}
+                      />
+                    )}
+
+                    {st.chain === "abstract" && (
+                      <div className="flex items-center gap-2 text-[10px] text-zinc-600">
+                        <div className="h-px flex-1 bg-white/[0.06]" />
+                        <span>یا روش دستی</span>
+                        <div className="h-px flex-1 bg-white/[0.06]" />
+                      </div>
+                    )}
+
+                    {/* secondary: injected EVM wallet (MetaMask/Rabby/…) on Abstract */}
                     {st.chain === "abstract" && (
                       <Button
                         onClick={sendFromWallet}
                         disabled={st.evmSending || amount == null}
-                        className="h-10 w-full gap-2 bg-emerald-400/90 text-[#06231A] hover:bg-emerald-300"
+                        variant="outline"
+                        className="h-9 w-full gap-2 border-white/15 bg-white/[0.03] text-xs hover:bg-white/[0.06]"
                       >
                         {st.evmSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-                        ارسال از کیف‌پول مرورگر (Abstract)
+                        ارسال از کیف‌پول EVM تزریقی (MetaMask و…)
                       </Button>
                     )}
 
@@ -337,7 +379,7 @@ export function PaymentDialog({
                     </div>
 
                     <Button
-                      onClick={submit}
+                      onClick={() => submit()}
                       disabled={st.phase === "verifying" || !st.txHash.trim()}
                       className="h-11 w-full gap-2"
                       variant={st.phase === "done" ? "secondary" : "default"}

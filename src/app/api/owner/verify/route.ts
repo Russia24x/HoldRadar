@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { keccak_256 } from "@noble/hashes/sha3.js";
 import { db } from "@/lib/db";
 import { clientIp, rateLimit } from "@/lib/ratelimit";
 import { createSession, serializeSession, sessionCookieOptions } from "@/lib/session";
-import { isTreasuryAddress, recoverEvmSigner, verifySolanaSigner } from "@/lib/verify/owner";
+import { isTreasuryAddress, recoverEvmSigner, verifySolanaSigner, evmPersonalSignHash } from "@/lib/verify/owner";
+import { erc1271Verify } from "@/lib/verify/erc1271";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +57,17 @@ export async function POST(req: Request) {
     recovered = recoverEvmSigner(challenge.message, signature);
     if (!recovered) {
       return NextResponse.json({ error: "امضای اتریومی نامعتبر است." }, { status: 401 });
+    }
+    if (!isTreasuryAddress(chain, recovered)) {
+      /* ERC-1271 fallback: the AGW treasury is a smart-contract wallet
+         (docs.abs.xyz/abstract-global-wallet/architecture) — its signatures
+         are validated by isValidSignature() on-chain, not by key recovery. */
+      const eip191 = evmPersonalSignHash(challenge.message);
+      const raw = keccak_256(new TextEncoder().encode(challenge.message));
+      const erc1271Ok = await erc1271Verify(challenge.message, signature, eip191, raw);
+      if (erc1271Ok) {
+        recovered = address; // treasury smart account validated on-chain
+      }
     }
   } else {
     const ok = verifySolanaSigner(challenge.message, signature, address);
