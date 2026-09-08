@@ -94,3 +94,34 @@ Work Log:
 Stage Summary:
 - همهٔ تست‌های QA سبز؛ ۵ فیچر جدید + ۲ رفع باگ موبایل
 - توصیهٔ دور بعد: ۱) بعد از نیمه‌شب UTC یک اجرای pipeline تا deltaهای واقعی روزانه در UI دیده شود ۲) اضافه‌کردن snapshot تاریخچه API (`/api/history`) + نمایش sparkline تغییر امتیاز ۳) تست پرداخت واقعی mainnet با کاربر ۴) export CSV/JSON علاوه بر متن
+
+---
+
+Task ID: r3 (webDevReview round 3)
+Agent: webDevReview cron agent (Z.ai Code)
+Task: ارزیابی وضعیت + QA کامل + فیچرهای جدید (تاریخچه/sparkline/خروجی) + بهبود استایل + اجرای pipeline نیمه‌شب UTC
+
+Work Log:
+- Sync check: local == origin/main (clean) → ادامه طبق RULES.md
+- QA پایه با agent-browser: صفحهٔ قفل، unlock با QA token، search/sort/expand، share+toast، موبایل 390px بدون overflow، بدون خطای runtime → وضعیت: پایدار، باگی یافت نشد
+- باگ محیطی (نه کد): dev server با OOM کشته شد (next-server RSS=2.2GB، dmesg تأیید). هر پروسهٔ background که از Bash tool اسپان شود در پایان همان دستور reap می‌شود (حتی setsid/nohup) → راه‌حل QA: اجرای سرور+تست‌ها در «یک» دستور batch. supervisor سیستم خودش سرور را دوباره بالا آورد (پایان کار 200 ✓)
+- نکتهٔ مهم agent-browser: `cookies set` positional است: `cookies set <name> <value> --url ...` (فرم --name/--value بی‌اثر است!). refs بعد از هر navigation ریست می‌شوند → snapshot → استخراج ref با sed → click
+- فیچرهای جدید این دور:
+  • `GET /api/history` (session-gated مثل rankings، 401 بدون نشست): ۱۴ اسنپ‌شات آخر + خلاصهٔ روزانه (top-3 + میانگین ۲۵تایی) + سری روند امتیاز/رتبه برای سکه‌های top-25 امروز
+  • `Sparkline.tsx`: SVG بدون وابستگی، گرادیان سطح، نقطهٔ آخر با pulse، رنگ emerald/amber طبقت صعود/نزول، responsive mode
+  • در RowDetail (بازشدن ردیف): بخش «روند امتیاز کل (N روز)» با sparkline بزرگ + چیپ‌های Δ/کمینه/بیشینه
+  • روی کارت‌های پودیوم: sparkline مینی (۹۲×۲۶)
+  • `HistoryDialog`: آرشیو روزانه (جدیدترین اول، نشان «امروز»، top-3 هر روز + میانگین) + دکمهٔ «آرشیو» در نوار متا + chip «آرشیو: N روز» (N>1)
+  • Export: CSV (BOM UTF-8، هدر فارسی، escape کوتیشن) و JSON (با weights/coverage) — دانلود Blob سمت کلاینت + toast
+  • «نبض امروز»: چیپ‌های صعود/نزول/ثابت/ورود جدید از rankChange ها
+  • کیبورد: ↑/↓ پیمایش ردیف‌ها (focus+scrollIntoView)، Enter باز/بسته؛ hint با kbd
+  • دکمهٔ شناور «بازگشت به بالا» (بعد از 700px اسکرول)
+- بهبود استایل: crown+shine sweep روی کارت اول، hr-grad-text (گرادیان emerald) روی امتیاز سه رتبهٔ اول (پودیوم+جدول)، hover کارت‌ها (-translate-y + سایهٔ emerald)، scale آواتار/نشان رتبه در hover، چیپ‌های متا با active:scale-95، focus ring جست‌وجو با سایهٔ نرم، chevron سبز هنگام باز، انیمیشن‌های CSS جدید در globals.css
+- pipeline نیمه‌شب UTC: اجرا در 2026-09-08T00:00:49Z (force) → اسنپ‌شات Sep 8 با prevDate=Sep 7؛ days=2، Canton 94.3→92.6، ۲۵ سکه با ۲+ نقطهٔ روند → sparklines و deltaهای واقعی در UI فعال شدند (تست شد: ۳ SVG پودیوم + TREND-SECTION-OK + ARCHIVE-2DAYS-OK)
+- QA نهایی همه سبز: PULSE-REAL، KEYNAV-OK (row 0→1، Enter expand/collapse)، CSV/JSON toast، آرشیو ۲ روزه، بدون خطای صفحه؛ VLM: پودیوم ۹/۱۰؛ ادعای «misalignment RTL» در آرشیو false positive بود (منطق LTR روی layout صحیح RTL)
+- lint پاک؛ سه commit push شد: `8cd3d4e` (تاریخچه/sparkline/export/استایل) → `3136ba0` (نبض/کیبورد/بازگشت-به-بالا + اسنپ‌شات Sep 8)
+
+Stage Summary:
+- دادهٔ دو روزهٔ واقعی + تمام فیچرهای روند فعال و تست‌شده؛ صفر خطای runtime
+- ریسک/نکتهٔ محیطی: OOM در sessions طولانی → اگر سرور مردود بود: batch-mode QA (سرور+تست در یک دستور)؛ supervisor خودش recovery می‌کند
+- توصیهٔ دور بعد: ۱) ادامهٔ آرشیو روزانه را خودکار نگه دارید (هر session بعد از نیمه‌شب UTC یک force refresh، یا در deploy واقعی Cron Trigger) ۲) تست پرداخت واقعی mainnet با کیف‌پول کاربر (فقط مانع Definition of Done #2) ۳) پورت به Cloudflare Worker تک‌فایلی طبق بریف اگر deploy خواسته شد ۴) اختیاری: sparkline رتبه (نه فقط امتیاز)، مقایسهٔ دو روز انتخابی در آرشیو
